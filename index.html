@@ -453,6 +453,11 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
       </div>
 
       <div class="field">
+        <label for="stretchPhoto"><input id="stretchPhoto" type="checkbox" role="switch"> Adaptar fotografía a la forma cónica</label>
+        <div class="hint">Activado: la foto se deforma junto con el sticker. Desactivado: conserva sus proporciones originales dentro del marco. Se guarda por persona.</div>
+      </div>
+
+      <div class="field">
         <label for="photo">Fotografía de la persona</label>
         <input id="photo" class="file" type="file" accept="image/png,image/jpeg,image/webp">
         <div class="file-status" id="photoStatus"></div>
@@ -627,6 +632,7 @@ const DEFAULT_FRAME='marco-memorial-transparente.png';
 
 const personDefaults={
   taper:75,
+  stretchPhoto:true,
   bg:'#202744',
   name:'Nombre de la persona',
   top:'En memoria de',
@@ -650,7 +656,7 @@ const personDefaults={
 };
 
 const controlIds=[
-  'taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
+  'stretchPhoto','taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
   'nameSize','nameColor','nameX','nameY',
   'topSize','topColor','topX','topY',
   'bottomSize','bottomColor','bottomX','bottomY'
@@ -806,7 +812,7 @@ function captureControls(){
   controlIds.forEach(id=>{
     const el=$(id);
     if(!el)return;
-    s[id]=(el.type==='range'||el.type==='number')?+el.value:el.value;
+    s[id]=el.type==='checkbox'?el.checked:(el.type==='range'||el.type==='number')?+el.value:el.value;
   });
 }
 
@@ -814,7 +820,7 @@ function applyControls(){
   const s=people[activePerson].state;
   controlIds.forEach(id=>{
     const el=$(id);
-    if(el)el.value=s[id]??personDefaults[id];
+    if(el){if(el.type==='checkbox')el.checked=s[id]??personDefaults[id];else el.value=s[id]??personDefaults[id];}
   });
   $('photo').value='';
 
@@ -878,6 +884,34 @@ function drawText(targetCtx,t,x,y,size,color){
   targetCtx.restore();
 }
 
+// Pre-compensate only the photograph for the later cone mapping.
+// Its displayed X and Y scales remain identical; the existing arch still clips it.
+function proportionalPhoto(p,photoScale,centerY,frameScale){
+  const s=p.state, ratio=Math.max(55,Math.min(99,+s.taper))/100;
+  const radius=W/(1-ratio),angle=W/radius;
+  const half=radius*Math.sin(angle/2),height=radius-(radius-W)*Math.cos(angle/2);
+  const scale=Math.min(W/(2*half),W/height),left=(W-2*half*scale)/2,top=(W-height*scale)/2;
+  function project(x,y){
+    x=W/2+(x-W/2)*frameScale;y=W/2+(y-W/2)*frameScale;
+    const a=(x/W-.5)*angle,r=radius-y;
+    return [left+(half+r*Math.sin(a))*scale,top+(radius-r*Math.cos(a))*scale];
+  }
+  const center=project(512+(+s.photoX),centerY+(+s.photoY));
+  const img=p.photoImg, source=document.createElement('canvas');
+  source.width=W;source.height=W;
+  const sc=source.getContext('2d'),is=photoScale*frameScale*scale;
+  sc.drawImage(img,center[0]-img.width*is/2,center[1]-img.height*is/2,img.width*is,img.height*is);
+  const pixels=sc.getImageData(0,0,W,W).data;
+  const result=sc.createImageData(W,W);
+  for(let y=0;y<W;y++)for(let x=0;x<W;x++){
+    const [px,py]=project(x+.5,y+.5),sx=Math.floor(px),sy=Math.floor(py);
+    if(sx<0||sy<0||sx>=W||sy>=W)continue;
+    const a=(y*W+x)*4,b=(sy*W+sx)*4;
+    for(let ch=0;ch<4;ch++)result.data[a+ch]=pixels[b+ch];
+  }
+  sc.putImageData(result,0,0);return source;
+}
+
 function renderFlatPerson(index,targetCanvas){
   const p=people[index];
   const s=p.state;
@@ -929,7 +963,9 @@ function renderFlatPerson(index,targetCanvas){
     const h=p.photoImg.height*scale;
     const centerY=(opening.top+opening.bottom)/2;
 
-    targetCtx.drawImage(
+    if(s.stretchPhoto===false && +s.taper<100){
+      targetCtx.drawImage(proportionalPhoto(p,scale,centerY,frameScale),0,0);
+    }else targetCtx.drawImage(
       p.photoImg,
       opening.cx+photoX-w/2,
       centerY+photoY-h/2,
