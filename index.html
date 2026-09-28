@@ -948,7 +948,7 @@ function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
     arcY:402
   };
 
-  if(p.photoImg && p.photoImg.complete && p.photoImg.naturalWidth){
+  {
     targetCtx.save();
     targetCtx.translate(W/2,W/2);
     targetCtx.scale(frameScale,frameScale);
@@ -965,6 +965,9 @@ function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
     targetCtx.closePath();
     targetCtx.clip();
 
+    targetCtx.fillStyle='#ffffff';
+    targetCtx.fillRect(0,0,W,W);
+    if(p.photoImg && p.photoImg.complete && p.photoImg.naturalWidth){
     const openingW=opening.radius*2;
     const openingH=opening.bottom-opening.top;
     const scale=Math.max(
@@ -985,6 +988,7 @@ function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
       w,
       h
     );
+    }
     targetCtx.restore();
   }
 
@@ -1059,9 +1063,9 @@ function draw(){
 function exportPersonCanvas(index){
   const off=document.createElement('canvas');off.width=off.height=W;renderPerson(index,off);
   const shape=people[index].state.shape;
-  if(shape!=='ovalV'&&shape!=='ovalH')return off;
-  const crop=document.createElement('canvas');crop.width=shape==='ovalV'?800:1024;crop.height=shape==='ovalH'?800:1024;
-  crop.getContext('2d').drawImage(off,shape==='ovalV'?112:0,shape==='ovalH'?112:0,crop.width,crop.height,0,0,crop.width,crop.height);
+  if(shape!=='ovalV'&&shape!=='ovalH'&&shape!=='diamond')return off;
+  const crop=document.createElement('canvas');crop.width=(shape==='ovalV'||shape==='diamond')?800:1024;crop.height=shape==='ovalH'?800:1024;
+  crop.getContext('2d').drawImage(off,(shape==='ovalV'||shape==='diamond')?112:0,shape==='ovalH'?112:0,crop.width,crop.height,0,0,crop.width,crop.height);
   return crop;
 }
 function personDataUrl(index){return exportPersonCanvas(index).toDataURL('image/png');}
@@ -1253,7 +1257,7 @@ function renderMeasured(index,target){
 }
 function outerShape(ctx,shape){
   ctx.beginPath();
-  if(shape==='diamond'){ctx.moveTo(512,0);ctx.lineTo(1024,512);ctx.lineTo(512,1024);ctx.lineTo(0,512);ctx.closePath();}
+  if(shape==='diamond'){ctx.moveTo(512,0);ctx.lineTo(912,512);ctx.lineTo(512,1024);ctx.lineTo(112,512);ctx.closePath();}
   else ctx.ellipse(512,512,shape==='ovalV'?400:512,shape==='ovalV'?512:400,0,0,Math.PI*2);
 }
 function renderDecorative(index,canvas){
@@ -1263,24 +1267,25 @@ function renderDecorative(index,canvas){
   // Leave room above and below the illustration for editable captions.
   const fs=Math.max(.3,+s.photoSize/100)*.82;
   ctx.save();ctx.translate(512,512);ctx.scale(fs,fs);ctx.translate(-512,-512);
-  const rx=diamond?280:horizontal?330:258,ry=diamond?280:horizontal?209:359,cy=diamond?510:horizontal?509:484;
+  const rx=diamond?280*800/1024:horizontal?330:258,ry=diamond?280:horizontal?209:359,cy=diamond?510:horizontal?509:484;
   ctx.save();ctx.beginPath();
   if(diamond){ctx.moveTo(512,cy-ry);ctx.lineTo(512+rx,cy);ctx.lineTo(512,cy+ry);ctx.lineTo(512-rx,cy);ctx.closePath();}
   else ctx.ellipse(512,cy,rx,ry,0,0,Math.PI*2);
   ctx.clip();
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,W);
   if(p.photoImg?.naturalWidth){
     const img=p.photoImg,scale=Math.max(rx*2/img.width,ry*2/img.height)*(+s.zoom);
     ctx.drawImage(img,512+(+s.photoX)-img.width*scale/2,cy+(+s.photoY)-img.height*scale/2,img.width*scale,img.height*scale);
   }
   ctx.restore();
-  if(asset?.naturalWidth)ctx.drawImage(asset,0,0,W,W);
+  if(asset?.naturalWidth)ctx.drawImage(asset,diamond?112:0,0,diamond?800:W,W);
   ctx.restore();
   for(const key of ['top','name','bottom']){
     const y=+s[key+'Y'],nx=Math.abs((y-512)/512);
-    let half=diamond?Math.max(0,512-Math.abs(y-512)):(shape==='ovalV'?400:512)*Math.sqrt(Math.max(0,1-((y-512)/(shape==='ovalV'?512:400))**2));
+    let half=diamond?Math.max(0,512-Math.abs(y-512))*800/1024:(shape==='ovalV'?400:512)*Math.sqrt(Math.max(0,1-((y-512)/(shape==='ovalV'?512:400))**2));
     const size=+s[key+'Size'],x=Math.max(512-half+12,Math.min(512+half-12,+s[key+'X']));
     const availableWidth=Math.max(10,2*(half-Math.abs(x-512)-16));
-    const maxWidth=key==='name'?Math.min(availableWidth,fs*(diamond?285:horizontal?375:340)):availableWidth;
+    const maxWidth=key==='name'?Math.min(availableWidth,fs*(diamond?285*800/1024:horizontal?375:340)):availableWidth;
     ctx.save();ctx.font='700 '+size+'px Georgia';const text=String(s[key]||'');
     const fitted=Math.min(size,size*maxWidth/Math.max(1,ctx.measureText(text).width));
     ctx.font='700 '+fitted+'px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=s[key+'Color'];ctx.fillText(text,x,y);ctx.restore();
@@ -1296,7 +1301,7 @@ function renderPerson(index,target){
 function printDimensions(s,width){
   if(s.shape==='measured'){const side=measuredGeometry.side*width/10;return [side,side];}
   // Full square export contains the transparent cutting perimeter.
-  return [width,width*(s.shape==='ovalV'?1024/800:s.shape==='ovalH'?800/1024:1)];
+  return [width,width*((s.shape==='ovalV'||s.shape==='diamond')?1024/800:s.shape==='ovalH'?800/1024:1)];
 }
 function updateShapeUI(){
   const shape=people[activePerson].state.shape;
