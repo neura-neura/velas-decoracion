@@ -420,6 +420,7 @@ button,
 }
 
 canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px 20px}
+fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:10px;display:flex;flex-wrap:wrap;gap:12px}fieldset label{font-size:13px}input[type=checkbox]{accent-color:var(--accent)}select{max-width:100%}
 </style>
 </head>
 <body>
@@ -427,8 +428,8 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
   <section>
     <div class="intro">
       <div class="eyebrow">Recuerdo • hasta 4 personas</div>
-      <h1>Hasta cuatro homenajes, una sola hoja.</h1>
-      <p>Edita cada persona por separado. En el PDF puedes elegir entre usar el espacio inferior para stickers o colocar ahí a otras dos personas.</p><div class="hint">En teléfono, la vista previa permanece fija arriba mientras editas los controles.</div>
+      <h1>Tus homenajes, listos para imprimir.</h1>
+      <p>Edita cada persona por separado. Elige de una a cuatro personas para el PDF, con o sin miniaturas.</p><div class="hint">En teléfono, la vista previa permanece fija arriba mientras editas los controles.</div>
     </div>
 
     <div class="panel">
@@ -446,6 +447,11 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
         <input id="bg" type="color">
       </div>
 
+      <div class="field">
+        <label for="shape">Forma del sticker</label>
+        <select id="shape"><option value="measured">Mi vaso · medidas reales · 3 secciones</option><option value="cone">Cónico ajustable · una pieza</option><option value="ovalV">Óvalo vertical</option><option value="ovalH">Óvalo horizontal</option><option value="diamond">Rombo</option></select>
+        <div class="hint" id="shapeHelp"></div>
+      </div>
       <div class="field">
         <label for="taper">Ancho inferior del sticker (% del superior)</label>
         <input id="taper" class="range" type="range" min="55" max="100" value="75">
@@ -487,7 +493,7 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
           <label for="photoSize">Tamaño del marco</label>
           <input id="photoSize" class="range" type="range" min="35" max="110" step="1">
         </div>
-        <div class="hint">Solo cambia la escala del marco dentro del lienzo. La exportación sigue siendo 1024 × 1024.</div>
+        <div class="hint">Solo cambia la escala del marco dentro del lienzo. El contorno elegido se conserva al exportar.</div>
       </div>
 
       <div class="section">
@@ -576,18 +582,24 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
 
       <div class="section">
         <h3>PDF carta</h3>
+        <fieldset><legend>Personas que se incluirán</legend>
+        <label><input type="checkbox" id="include0" checked> Persona 1</label>
+        <label><input type="checkbox" id="include1"> Persona 2</label>
+        <label><input type="checkbox" id="include2"> Persona 3</label>
+        <label><input type="checkbox" id="include3"> Persona 4</label>
+        </fieldset>
 
         <div class="field">
-          <label for="pdfMode">Contenido de la parte inferior</label>
+          <label for="pdfMode">Contenido del PDF</label>
           <select id="pdfMode">
-            <option value="stickers">6 stickers por persona (2 personas)</option>
-            <option value="fourPeople">Otras 2 personas (4 personas en total)</option>
+            <option value="stickers">Imagen principal + 5 stickers por persona</option>
+            <option value="fourPeople">Solo imágenes principales</option>
           </select>
         </div>
 
         <div class="row">
           <div class="field">
-            <label for="pdfSize">Tamaño de cada imagen principal (cm)</label>
+            <label for="pdfSize">Ancho principal / arco superior del vaso (cm)</label>
             <input id="pdfSize" type="number" min="3" max="10.5" step=".1" value="10">
           </div>
           <div class="field">
@@ -601,7 +613,7 @@ canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px
         </div>
 
         <div class="hint" id="pdfModeHelp">
-          Modo stickers: Persona 1 y Persona 2 aparecen arriba y debajo se colocan 6 stickers de 4 × 4 cm de cada una.
+          Elige las personas que quieres incluir y si deseas cinco miniaturas por persona.
         </div>
       </div>
     </div>
@@ -631,6 +643,7 @@ const LEGACY_FRAME='editorMemorialFrameV1';
 const DEFAULT_FRAME='marco-memorial-transparente.png';
 
 const personDefaults={
+  shape:'measured',
   taper:75,
   stretchPhoto:true,
   bg:'#202744',
@@ -638,17 +651,17 @@ const personDefaults={
   top:'En memoria de',
   bottom:'Siempre en nuestros corazones',
   zoom:1,
-  photoSize:100,
+  photoSize:80,
   photoX:0,
   photoY:0,
   nameSize:25,
   nameColor:'#563126',
   nameX:512,
-  nameY:895,
+  nameY:848,
   topSize:48,
   topColor:'#fff5dc',
   topX:512,
-  topY:72,
+  topY:55,
   bottomSize:34,
   bottomColor:'#fff5dc',
   bottomX:512,
@@ -656,7 +669,7 @@ const personDefaults={
 };
 
 const controlIds=[
-  'stretchPhoto','taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
+  'shape','stretchPhoto','taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
   'nameSize','nameColor','nameX','nameY',
   'topSize','topColor','topX','topY',
   'bottomSize','bottomColor','bottomX','bottomY'
@@ -753,6 +766,8 @@ function migrateOrLoad(){
     people=restored;
 
     if(loaded.pdf){
+      [0,1,2,3].forEach(i=>$('include'+i).checked=Array.isArray(loaded.pdf.selected)?loaded.pdf.selected.includes(i):!!people[i].photoSrc);
+      if(![0,1,2,3].some(i=>$('include'+i).checked))$('include0').checked=true;
       $('pdfSize').value=loaded.pdf.size??10;
       $('pdfMargin').value=loaded.pdf.margin??1;
       $('pdfMode').value=loaded.pdf.mode==='fourPeople'?'fourPeople':'stickers';
@@ -795,6 +810,7 @@ function saveAll(){
     pdf:{
       size:+$('pdfSize').value||10,
       margin:+$('pdfMargin').value||1,
+      selected:[0,1,2,3].filter(i=>$('include'+i).checked),
       mode:$('pdfMode').value
     },
     activePerson
@@ -846,16 +862,12 @@ function switchPerson(index){
 }
 
 function updatePdfModeUI(){
-  const four=$('pdfMode').value==='fourPeople';
-
-  $('downloadPdf').textContent=four
-    ? 'Descargar PDF con 4 personas'
-    : 'Descargar PDF con 2 personas + stickers';
-
-  $('pdfModeHelp').textContent=four
-    ? 'Modo 4 personas: Persona 1 y Persona 2 van en la fila superior; Persona 3 y Persona 4 ocupan la parte inferior. Todas conservan exactamente el tamaño indicado.'
-    : 'Modo stickers: Persona 1 y Persona 2 aparecen arriba y debajo se colocan 6 stickers de 4 × 4 cm de cada una.';
+  const n=[0,1,2,3].filter(i=>$('include'+i).checked).length;
+  $('downloadPdf').textContent='Descargar PDF · '+n+' persona'+(n===1?'':'s');
+  $('downloadPdf').disabled=n===0;
+  $('pdfModeHelp').textContent='Solo se exportan las personas marcadas. Se añaden hojas carta si hace falta, sin reducir el tamaño. Para Mi vaso, 10 cm significa 10 cm de arco superior; recorta y coloca las tres secciones en orden, sin superponer. Imprime a tamaño real / 100%.';
 }
+[0,1,2,3].forEach(i=>$('include'+i).addEventListener('change',()=>{saveAll();updatePdfModeUI();}));
 
 function fitText(targetCtx,text,max,size){
   targetCtx.font='700 '+size+'px Georgia';
@@ -893,13 +905,14 @@ function proportionalPhoto(p,photoScale,centerY,frameScale){
   const scale=Math.min(W/(2*half),W/height),left=(W-2*half*scale)/2,top=(W-height*scale)/2;
   function project(x,y){
     x=W/2+(x-W/2)*frameScale;y=W/2+(y-W/2)*frameScale;
+    if(s.shape==='measured')return measuredForward(x,y);
     const a=(x/W-.5)*angle,r=radius-y;
     return [left+(half+r*Math.sin(a))*scale,top+(radius-r*Math.cos(a))*scale];
   }
   const center=project(512+(+s.photoX),centerY+(+s.photoY));
   const img=p.photoImg, source=document.createElement('canvas');
   source.width=W;source.height=W;
-  const sc=source.getContext('2d'),is=photoScale*frameScale*scale;
+  const sc=source.getContext('2d'),is=photoScale*frameScale*(s.shape==='measured'?10/measuredGeometry.side:scale);
   sc.drawImage(img,center[0]-img.width*is/2,center[1]-img.height*is/2,img.width*is,img.height*is);
   const pixels=sc.getImageData(0,0,W,W).data;
   const result=sc.createImageData(W,W);
@@ -912,7 +925,7 @@ function proportionalPhoto(p,photoScale,centerY,frameScale){
   sc.putImageData(result,0,0);return source;
 }
 
-function renderFlatPerson(index,targetCanvas){
+function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
   const p=people[index];
   const s=p.state;
   const targetCtx=targetCanvas.getContext('2d');
@@ -963,7 +976,7 @@ function renderFlatPerson(index,targetCanvas){
     const h=p.photoImg.height*scale;
     const centerY=(opening.top+opening.bottom)/2;
 
-    if(s.stretchPhoto===false && +s.taper<100){
+    if(!forcePlainPhoto && s.stretchPhoto===false && (s.shape==='measured'||+s.taper<100)){
       targetCtx.drawImage(proportionalPhoto(p,scale,centerY,frameScale),0,0);
     }else targetCtx.drawImage(
       p.photoImg,
@@ -1016,7 +1029,7 @@ function coneMap(percent){
   }
   warpCache={percent,map};return map;
 }
-function renderPerson(index,targetCanvas){
+function renderConePerson(index,targetCanvas){
   const percent=Math.max(55,Math.min(100,Number(people[index].state.taper)||75));
   renderFlatPerson(index,flatCanvas);
   const context=targetCanvas.getContext('2d');
@@ -1039,18 +1052,21 @@ function renderPerson(index,targetCanvas){
 function draw(){
   captureControls();
   $('taperValue').textContent=people[activePerson].state.taper;
+  updateShapeUI();
   renderPerson(activePerson,c);
 }
 
-function personDataUrl(index){
-  const off=document.createElement('canvas');
-  off.width=W;
-  off.height=W;
-  renderPerson(index,off);
-  return off.toDataURL('image/png');
+function exportPersonCanvas(index){
+  const off=document.createElement('canvas');off.width=off.height=W;renderPerson(index,off);
+  const shape=people[index].state.shape;
+  if(shape!=='ovalV'&&shape!=='ovalH')return off;
+  const crop=document.createElement('canvas');crop.width=shape==='ovalV'?800:1024;crop.height=shape==='ovalH'?800:1024;
+  crop.getContext('2d').drawImage(off,shape==='ovalV'?112:0,shape==='ovalH'?112:0,crop.width,crop.height,0,0,crop.width,crop.height);
+  return crop;
 }
+function personDataUrl(index){return exportPersonCanvas(index).toDataURL('image/png');}
 
-controlIds.forEach(id=>{
+controlIds.filter(id=>id!=='shape').forEach(id=>{
   $(id).addEventListener('input',()=>{
     captureControls();
     saveAll();
@@ -1141,166 +1157,163 @@ $('download').addEventListener('click',()=>{
 
   const a=document.createElement('a');
   a.download='homenaje-'+safe+'.png';
-  a.href=c.toDataURL('image/png');
+  a.href=personDataUrl(activePerson);
   a.click();
 });
 
-function addStickerGrid(pdf,data,centerX,gridY){
-  const sticker=40;
-  const gapX=6;
-  const gapY=6;
-  const cols=2;
-  const rows=3;
-  const gridW=sticker*cols+gapX*(cols-1);
-  const startX=centerX-gridW/2;
-
-  for(let row=0;row<rows;row++){
-    for(let col=0;col<cols;col++){
-      const x=startX+col*(sticker+gapX);
-      const y=gridY+row*(sticker+gapY);
-      pdf.addImage(data,'PNG',x,y,sticker,sticker);
+$('downloadPdf').addEventListener('click',async()=>{
+  captureControls();saveAll();
+  const selected=[0,1,2,3].filter(i=>$('include'+i).checked);
+  if(!selected.length)return;
+  if(!window.jspdf){alert('No se pudo cargar el generador PDF. Revisa tu conexión.');return;}
+  try{await Promise.all(selected.map(i=>assetReady(people[i])));}catch(e){alert(e.message);return;}
+  const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
+  const pageW=215.9,pageH=279.4,margin=Math.max(5,(+$('pdfMargin').value||0)*10),gap=5;
+  const size=+$('pdfSize').value;
+  if(!Number.isFinite(size)||size<3||size>10.5){alert('El ancho debe estar entre 3 y 10.5 cm.');return;}
+  const items=[];
+  for(const i of selected){
+    const data=personDataUrl(i),dims=printDimensions(people[i].state,size);
+    items.push({data,w:dims[0]*10,h:dims[1]*10,breakBefore:items.length>0&&$('pdfMode').value==='stickers'});
+    if($('pdfMode').value==='stickers'){
+      const max=Math.max(...dims);
+      for(let j=0;j<5;j++)items.push({data,w:40*dims[0]/max,h:40*dims[1]/max,breakBefore:j===0});
     }
   }
-}
-
-function addOnePersonPage(pdf,data,mainSize,topMargin){
-  const pageW=pdf.internal.pageSize.getWidth();
-  const pageH=pdf.internal.pageSize.getHeight();
-  const mainX=(pageW-mainSize)/2;
-  const mainY=topMargin;
-  const stickerGridHeight=40*3+6*2;
-  const gridY=mainY+mainSize+8;
-
-  pdf.addImage(data,'PNG',mainX,mainY,mainSize,mainSize);
-
-  if(gridY+stickerGridHeight<=pageH-5){
-    addStickerGrid(pdf,data,pageW/2,gridY);
-  }else{
-    pdf.addPage('letter','portrait');
-    addStickerGrid(pdf,data,pageW/2,topMargin);
+  if(items.some(a=>a.w>pageW-2*margin||a.h>pageH-2*margin)){alert('El tamaño y los márgenes no caben en carta. Reduce el margen o el tamaño.');return;}
+  let x=margin,y=margin,rowH=0;
+  for(const item of items){
+    if(item.breakBefore&&x>margin){x=margin;y+=rowH+gap;rowH=0;}
+    if(x+item.w>pageW-margin+.001){x=margin;y+=rowH+gap;rowH=0;}
+    if(y+item.h>pageH-margin+.001){pdf.addPage();x=margin;y=margin;rowH=0;}
+    pdf.addImage(item.data,'PNG',x,y,item.w,item.h);
+    x+=item.w+gap;rowH=Math.max(rowH,item.h);
   }
-}
-
-
-function addTwoPeoplePage(pdf,dataA,dataB,mainSize,topMargin){
-  const pageW=pdf.internal.pageSize.getWidth();
-  const mainGap=4;
-  const twoMainWidth=mainSize*2+mainGap;
-  const leftX=(pageW-twoMainWidth)/2;
-  const rightX=leftX+mainSize+mainGap;
-
-  pdf.addImage(dataA,'PNG',leftX,topMargin,mainSize,mainSize);
-  pdf.addImage(dataB,'PNG',rightX,topMargin,mainSize,mainSize);
-}
-
-$('downloadPdf').addEventListener('click',()=>{
-  captureControls();
-  saveAll();
-
-  if(!window.jspdf){
-    alert('No se pudo cargar el generador PDF. Revisa tu conexión.');
-    return;
-  }
-
-  const mode=$('pdfMode').value;
-  const requiredCount=mode==='fourPeople'?4:2;
-  const missing=[];
-
-  for(let i=0;i<requiredCount;i++){
-    if(!people[i].photoSrc)missing.push('Persona '+(i+1));
-  }
-
-  if(missing.length){
-    if(!confirm(missing.join(', ')+' no '+(missing.length===1?'tiene':'tienen')+' fotografía cargada. ¿Generar el PDF de todas formas?')){
-      return;
-    }
-  }
-
-  const {jsPDF}=window.jspdf;
-  const pdf=new jsPDF({
-    orientation:'portrait',
-    unit:'mm',
-    format:'letter'
-  });
-
-  const mainSize=(+$('pdfSize').value||10)*10;
-  const topMargin=(+$('pdfMargin').value||1)*10;
-  const pageW=pdf.internal.pageSize.getWidth();
-  const pageH=pdf.internal.pageSize.getHeight();
-
-  const mainGap=4;
-  const twoMainWidth=mainSize*2+mainGap;
-  const horizontalFits=twoMainWidth<=pageW-4;
-
-  const data1=personDataUrl(0);
-  const data2=personDataUrl(1);
-
-  if(mode==='fourPeople'){
-    const data3=personDataUrl(2);
-    const data4=personDataUrl(3);
-
-    // La segunda fila comienza exactamente en la zona que antes usaban los stickers.
-    const rowGap=8;
-    const secondRowY=topMargin+mainSize+rowGap;
-    const fourPeopleVerticalFits=secondRowY+mainSize<=pageH-5;
-
-    if(horizontalFits && fourPeopleVerticalFits){
-      // UNA SOLA HOJA:
-      // Persona 1 | Persona 2
-      // Persona 3 | Persona 4
-      const leftX=(pageW-twoMainWidth)/2;
-      const rightX=leftX+mainSize+mainGap;
-
-      pdf.addImage(data1,'PNG',leftX,topMargin,mainSize,mainSize);
-      pdf.addImage(data2,'PNG',rightX,topMargin,mainSize,mainSize);
-      pdf.addImage(data3,'PNG',leftX,secondRowY,mainSize,mainSize);
-      pdf.addImage(data4,'PNG',rightX,secondRowY,mainSize,mainSize);
-    }else if(horizontalFits){
-      // Si las dos filas no caben verticalmente, no se reduce nada:
-      // dos personas por página.
-      addTwoPeoplePage(pdf,data1,data2,mainSize,topMargin);
-      pdf.addPage('letter','portrait');
-      addTwoPeoplePage(pdf,data3,data4,mainSize,topMargin);
-    }else{
-      // Si ni siquiera dos imágenes caben lado a lado al tamaño solicitado,
-      // cada persona obtiene su propia página.
-      addOnePersonPage(pdf,data1,mainSize,topMargin);
-      pdf.addPage('letter','portrait');
-      addOnePersonPage(pdf,data2,mainSize,topMargin);
-      pdf.addPage('letter','portrait');
-      addOnePersonPage(pdf,data3,mainSize,topMargin);
-      pdf.addPage('letter','portrait');
-      addOnePersonPage(pdf,data4,mainSize,topMargin);
-    }
-
-    pdf.save('homenajes-4-personas.pdf');
-    return;
-  }
-
-  // MODO STICKERS — conserva el comportamiento anterior.
-  const stickerGridHeight=40*3+6*2;
-  const gridY=topMargin+mainSize+8;
-  const verticalFits=gridY+stickerGridHeight<=pageH-5;
-
-  if(horizontalFits && verticalFits){
-    const leftMainX=(pageW-twoMainWidth)/2;
-    const rightMainX=leftMainX+mainSize+mainGap;
-    const leftCenter=leftMainX+mainSize/2;
-    const rightCenter=rightMainX+mainSize/2;
-
-    pdf.addImage(data1,'PNG',leftMainX,topMargin,mainSize,mainSize);
-    pdf.addImage(data2,'PNG',rightMainX,topMargin,mainSize,mainSize);
-
-    addStickerGrid(pdf,data1,leftCenter,gridY);
-    addStickerGrid(pdf,data2,rightCenter,gridY);
-  }else{
-    addOnePersonPage(pdf,data1,mainSize,topMargin);
-    pdf.addPage('letter','portrait');
-    addOnePersonPage(pdf,data2,mainSize,topMargin);
-  }
-
-  pdf.save('homenajes-2-personas-con-stickers.pdf');
+  pdf.save('homenajes-'+selected.length+'-personas.pdf');
 });
+const shapeAssets={};
+for(const [shape,src] of Object.entries({ovalV:'marco-ovalo-vertical.png',ovalH:'marco-ovalo-horizontal.png',diamond:'marco-rombo.png'})){
+  const img=new Image();shapeAssets[shape]=img;img.onload=()=>draw();img.src=src;
+}
+async function assetReady(p){
+  const imgs=[p.photoImg,p.frameImg,shapeAssets[p.state.shape]].filter(Boolean);
+  await Promise.all(imgs.map(img=>img.complete?Promise.resolve():img.decode().catch(()=>{})));
+  if(imgs.some(img=>!img.naturalWidth))throw new Error('No se pudo cargar una imagen. Recarga la página.');
+}
+// Three independent developable frusta. Centimeters, measured axially.
+const vesselProfile=[{z:0,d:6.2},{z:3.5,d:5.8},{z:8.2,d:5.1},{z:10,d:4.3}];
+const measuredGeometry=(()=>{
+  let cursor=0,maxWidth=0;
+  const sections=[];
+  const azimuth=10/(6.2/2);
+  for(let i=0;i<3;i++){
+    const a=vesselProfile[i],b=vesselProfile[i+1],dr=(a.d-b.d)/2;
+    const slant=Math.hypot(b.z-a.z,dr),R=(a.d/2)*slant/dr;
+    const angle=azimuth*dr/slant,half=R*Math.sin(angle/2);
+    const height=R-(R-slant)*Math.cos(angle/2);
+    sections.push({z:a.z,dz:b.z-a.z,slant,R,angle,half,height,y:cursor});
+    cursor+=height+(i<2?.15:0);maxWidth=Math.max(maxWidth,2*half);
+  }
+  return {sections,width:maxWidth,height:cursor,side:Math.max(maxWidth,cursor)};
+})();
+function measuredForward(u,v){
+  const g=measuredGeometry,z=Math.max(0,Math.min(10,v/W*10));
+  const band=g.sections.find(b=>z<=b.z+b.dz)||g.sections[2];
+  const r=band.R-(z-band.z)/band.dz*band.slant,a=(u/W-.5)*band.angle;
+  return [W/2+r*Math.sin(a)*W/g.side,((g.side-g.height)/2+band.y+band.R-r*Math.cos(a))*W/g.side];
+}
+let measuredMap=null;
+function getMeasuredMap(){
+  if(measuredMap)return measuredMap;
+  const g=measuredGeometry,map=new Float32Array(W*W*2);map.fill(-1);
+  for(let y=0;y<W;y++)for(let x=0;x<W;x++){
+    const dx=(x+.5-W/2)*g.side/W,py=(y+.5)*g.side/W-(g.side-g.height)/2;
+    for(const band of g.sections){
+      if(py<band.y||py>band.y+band.height)continue;
+      const dy=band.R-(py-band.y),r=Math.hypot(dx,dy),a=Math.atan2(dx,dy);
+      if(r<band.R-band.slant||r>band.R||Math.abs(a)>band.angle/2)continue;
+      const u=(a/band.angle+.5)*W-.5,v=(band.z+(band.R-r)/band.slant*band.dz)/10*W-.5;
+      map[(y*W+x)*2]=Math.max(0,Math.min(W-1,u));map[(y*W+x)*2+1]=Math.max(0,Math.min(W-1,v));break;
+    }
+  }
+  measuredMap=map;return map;
+}
+function renderMeasured(index,target){
+  renderFlatPerson(index,flatCanvas);
+  const source=flatCanvas.getContext('2d').getImageData(0,0,W,W).data;
+  const ctx=target.getContext('2d'),out=ctx.createImageData(W,W),map=getMeasuredMap();
+  for(let i=0;i<W*W;i++){
+    const u=map[i*2],v=map[i*2+1];if(u<0)continue;
+    const x=Math.floor(u),y=Math.floor(v),fx=u-x,fy=v-y;
+    const a=(y*W+x)*4,b=(y*W+Math.min(x+1,W-1))*4;
+    const c=(Math.min(y+1,W-1)*W+x)*4,d=(Math.min(y+1,W-1)*W+Math.min(x+1,W-1))*4;
+    for(let ch=0;ch<4;ch++)out.data[i*4+ch]=(source[a+ch]*(1-fx)+source[b+ch]*fx)*(1-fy)+(source[c+ch]*(1-fx)+source[d+ch]*fx)*fy;
+  }
+  ctx.putImageData(out,0,0);
+}
+function outerShape(ctx,shape){
+  ctx.beginPath();
+  if(shape==='diamond'){ctx.moveTo(512,0);ctx.lineTo(1024,512);ctx.lineTo(512,1024);ctx.lineTo(0,512);ctx.closePath();}
+  else ctx.ellipse(512,512,shape==='ovalV'?400:512,shape==='ovalV'?512:400,0,0,Math.PI*2);
+}
+function renderDecorative(index,canvas){
+  const p=people[index],s=p.state,shape=s.shape,ctx=canvas.getContext('2d');
+  const asset=shapeAssets[shape],horizontal=shape==='ovalH',diamond=shape==='diamond';
+  ctx.clearRect(0,0,W,W);ctx.save();outerShape(ctx,shape);ctx.clip();ctx.fillStyle=s.bg;ctx.fillRect(0,0,W,W);
+  // Leave room above and below the illustration for editable captions.
+  const fs=Math.max(.3,+s.photoSize/100)*.82;
+  ctx.save();ctx.translate(512,512);ctx.scale(fs,fs);ctx.translate(-512,-512);
+  const rx=diamond?280:horizontal?330:258,ry=diamond?280:horizontal?209:359,cy=diamond?510:horizontal?509:484;
+  ctx.save();ctx.beginPath();
+  if(diamond){ctx.moveTo(512,cy-ry);ctx.lineTo(512+rx,cy);ctx.lineTo(512,cy+ry);ctx.lineTo(512-rx,cy);ctx.closePath();}
+  else ctx.ellipse(512,cy,rx,ry,0,0,Math.PI*2);
+  ctx.clip();
+  if(p.photoImg?.naturalWidth){
+    const img=p.photoImg,scale=Math.max(rx*2/img.width,ry*2/img.height)*(+s.zoom);
+    ctx.drawImage(img,512+(+s.photoX)-img.width*scale/2,cy+(+s.photoY)-img.height*scale/2,img.width*scale,img.height*scale);
+  }
+  ctx.restore();
+  if(asset?.naturalWidth)ctx.drawImage(asset,0,0,W,W);
+  ctx.restore();
+  for(const key of ['top','name','bottom']){
+    const y=+s[key+'Y'],nx=Math.abs((y-512)/512);
+    let half=diamond?Math.max(0,512-Math.abs(y-512)):(shape==='ovalV'?400:512)*Math.sqrt(Math.max(0,1-((y-512)/(shape==='ovalV'?512:400))**2));
+    const size=+s[key+'Size'],x=Math.max(512-half+12,Math.min(512+half-12,+s[key+'X']));
+    const availableWidth=Math.max(10,2*(half-Math.abs(x-512)-16));
+    const maxWidth=key==='name'?Math.min(availableWidth,fs*(diamond?285:horizontal?375:340)):availableWidth;
+    ctx.save();ctx.font='700 '+size+'px Georgia';const text=String(s[key]||'');
+    const fitted=Math.min(size,size*maxWidth/Math.max(1,ctx.measureText(text).width));
+    ctx.font='700 '+fitted+'px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=s[key+'Color'];ctx.fillText(text,x,y);ctx.restore();
+  }
+  ctx.restore();
+}
+function renderPerson(index,target){
+  const shape=people[index].state.shape;
+  if(shape==='measured')renderMeasured(index,target);
+  else if(shapeAssets[shape])renderDecorative(index,target);
+  else renderConePerson(index,target);
+}
+function printDimensions(s,width){
+  if(s.shape==='measured'){const side=measuredGeometry.side*width/10;return [side,side];}
+  // Full square export contains the transparent cutting perimeter.
+  return [width,width*(s.shape==='ovalV'?1024/800:s.shape==='ovalH'?800/1024:1)];
+}
+function updateShapeUI(){
+  const shape=people[activePerson].state.shape;
+  $('taper').closest('.field').hidden=shape!=='cone';
+  $('stretchPhoto').closest('.field').hidden=shape!=='cone'&&shape!=='measured';
+  $('shapeHelp').textContent=shape==='measured'?'Medidas: Ø 6.2 → 5.8 → 5.1 → 4.3 cm; alturas 3.5 + 4.7 + 1.8 cm. Recorta las 3 secciones y pega de arriba abajo, uniendo sus centros sin superponer. Aproximación por tramos: prueba primero en papel. Con ancho PDF 10 cm se conserva la escala del vaso.':shape==='cone'?'Una pieza para un vaso de inclinación uniforme.':'Forma decorativa plana. Su recorte ovalado o en rombo no compensa por sí solo la curvatura del vaso.';
+}
+const layoutFields=['photoSize','topX','topY','bottomX','bottomY','nameX','nameY'];
+$('shape').addEventListener('change',()=>{
+  const s=people[activePerson].state,old=s.shape,next=$('shape').value;
+  s.shapeLayouts=s.shapeLayouts||{};
+  s.shapeLayouts[old]=Object.fromEntries(layoutFields.map(k=>[k,s[k]]));
+  const layouts={ovalV:{photoSize:83,topX:512,topY:85,bottomX:512,bottomY:940,nameX:512,nameY:771},ovalH:{photoSize:90,topX:512,topY:183,bottomX:512,bottomY:840,nameX:512,nameY:696},diamond:{photoSize:85,topX:512,topY:130,bottomX:512,bottomY:870,nameX:512,nameY:743}};
+  Object.assign(s,s.shapeLayouts[next]||layouts[next]||Object.fromEntries(layoutFields.map(k=>[k,personDefaults[k]])));
+  s.shape=next;applyControls();saveAll();draw();
+});
+
 migrateOrLoad();
 applyControls();
 updatePdfModeUI();
