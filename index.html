@@ -1165,6 +1165,24 @@ $('download').addEventListener('click',()=>{
   a.click();
 });
 
+function principalGrid(items,pageW,pageH,requestedTop){
+  const gap=4,minMargin=5,rows=[];
+  for(let i=0;i<items.length;i+=2){
+    const row=items.slice(i,i+2);
+    rows.push({items:row,width:row.reduce((sum,item)=>sum+item.w,0)+(row.length-1)*gap,height:Math.max(...row.map(item=>item.h))});
+  }
+  const height=rows.reduce((sum,row)=>sum+row.height,0)+(rows.length-1)*gap;
+  if(rows.some(row=>row.width>pageW-2*minMargin+.001)||height>pageH-2*minMargin+.001)return null;
+  let y=Math.max(minMargin,Math.min(requestedTop,pageH-minMargin-height));
+  const positions=[];
+  for(const row of rows){
+    let x=(pageW-row.width)/2;
+    for(const item of row.items){positions.push({x,y});x+=item.w+gap;}
+    y+=row.height+gap;
+  }
+  return positions;
+}
+
 $('downloadPdf').addEventListener('click',async()=>{
   captureControls();saveAll();
   const selected=[0,1,2,3].filter(i=>$('include'+i).checked);
@@ -1182,6 +1200,15 @@ $('downloadPdf').addEventListener('click',async()=>{
     if($('pdfMode').value==='stickers'){
       const max=Math.max(...dims);
       for(let j=0;j<5;j++)items.push({data,w:40*dims[0]/max,h:40*dims[1]/max,breakBefore:j===0});
+    }
+  }
+  // Fit principal images as a centered 2 × 2 grid at their exact print size.
+  // The configured margin is vertical; it must not consume the side gutters.
+  if($('pdfMode').value==='fourPeople' && items.length<=4){
+    const layout=principalGrid(items,pageW,pageH,margin);
+    if(layout){
+      items.forEach((item,i)=>pdf.addImage(item.data,'PNG',layout[i].x,layout[i].y,item.w,item.h));
+      pdf.save('homenajes-'+selected.length+'-personas.pdf');return;
     }
   }
   if(items.some(a=>a.w>pageW-2*margin||a.h>pageH-2*margin)){alert('El tamaño y los márgenes no caben en carta. Reduce el margen o el tamaño.');return;}
