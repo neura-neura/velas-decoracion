@@ -1260,6 +1260,42 @@ function outerShape(ctx,shape){
   if(shape==='diamond'){ctx.moveTo(512,0);ctx.lineTo(912,512);ctx.lineTo(512,1024);ctx.lineTo(112,512);ctx.closePath();}
   else ctx.ellipse(512,512,shape==='ovalV'?400:512,shape==='ovalV'?512:400,0,0,Math.PI*2);
 }
+// Place upright glyphs by arc length on an inset ellipse, not by equal angles.
+function drawOvalCaption(ctx,s,key){
+  const text=String(s[key]||'').trim();if(!text)return;
+  const bottom=key==='bottom',outerRx=s.shape==='ovalV'?400:512,outerRy=s.shape==='ovalV'?512:400;
+  let size=+s[key+'Size'];
+  const inset=size*.8+10;
+  const ry=Math.max(60,Math.min(outerRy-inset,Math.abs(+s[key+'Y']-512)));
+  const rx=Math.min(outerRx-inset,outerRx*ry/outerRy);
+  const points=[];let length=0,prev=null;
+  for(let i=0;i<=400;i++){
+    const angle=-1.18+i*2.36/400;
+    const x=512+rx*Math.sin(angle),y=512+(bottom?1:-1)*ry*Math.cos(angle);
+    if(prev)length+=Math.hypot(x-prev.x,y-prev.y);
+    const point={x,y,angle,length};points.push(point);prev=point;
+  }
+  ctx.save();ctx.font='700 '+size+'px Georgia';
+  const measured=ctx.measureText(text).width;
+  size*=Math.min(1,(length-16)/Math.max(1,measured));ctx.font='700 '+size+'px Georgia';
+  const width=ctx.measureText(text).width;
+  const offset=Math.max(-(length-width)/2,Math.min((length-width)/2,+s[key+'X']-512));
+  let prefix='',cursor=0;
+  ctx.fillStyle=s[key+'Color'];ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const char of Array.from(text)){
+    const before=ctx.measureText(prefix).width;prefix+=char;
+    const after=ctx.measureText(prefix).width;
+    const distance=(length-width)/2+offset+(before+after)/2;
+    while(cursor<points.length-2&&points[cursor+1].length<distance)cursor++;
+    const a=points[cursor],b=points[cursor+1],f=(distance-a.length)/(b.length-a.length);
+    const angle=a.angle+(b.angle-a.angle)*f;
+    ctx.save();ctx.translate(a.x+(b.x-a.x)*f,a.y+(b.y-a.y)*f);
+    ctx.rotate(Math.atan2((bottom?-1:1)*ry*Math.sin(angle),rx*Math.cos(angle)));
+    ctx.fillText(char,0,0);ctx.restore();
+  }
+  ctx.restore();
+}
+
 function renderDecorative(index,canvas){
   const p=people[index],s=p.state,shape=s.shape,ctx=canvas.getContext('2d');
   const asset=shapeAssets[shape],horizontal=shape==='ovalH',diamond=shape==='diamond';
@@ -1281,6 +1317,7 @@ function renderDecorative(index,canvas){
   if(asset?.naturalWidth)ctx.drawImage(asset,diamond?112:0,0,diamond?800:W,W);
   ctx.restore();
   for(const key of ['top','name','bottom']){
+    if(!diamond && key!=='name'){drawOvalCaption(ctx,s,key);continue;}
     const y=+s[key+'Y'],nx=Math.abs((y-512)/512);
     let half=diamond?Math.max(0,512-Math.abs(y-512))*800/1024:(shape==='ovalV'?400:512)*Math.sqrt(Math.max(0,1-((y-512)/(shape==='ovalV'?512:400))**2));
     const size=+s[key+'Size'],x=Math.max(512-half+12,Math.min(512+half-12,+s[key+'X']));
