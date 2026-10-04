@@ -1449,7 +1449,12 @@ const mutedPalette=[
  ['Pino','#2f453d'],['Bosque','#435847'],['Oliva','#60654b'],['Salvia','#8b9780'],['Eucalipto','#a7b19b'],['Musgo','#74785a'],['Verde humo','#596b63'],['Verde niebla','#c4cec0'],
  ['Vino','#50363f'],['Ciruela','#554457'],['Malva','#817080'],['Lavanda gris','#a59aa9'],['Rosa viejo','#a78283'],['Rosa polvo','#c4aaa6'],['Berenjena','#3e3447'],['Gris violeta','#6a6477'],
  ['Café','#473b35'],['Cacao','#665148'],['Terracota','#946e5c'],['Arcilla','#b28e79'],['Arena','#c9b69b'],['Lino','#e4d9c7'],['Marfil','#f2ebdb'],['Pergamino','#d7c7a8'],
- ['Carbón','#292b2e'],['Grafito','#444647'],['Gris cálido','#797770'],['Piedra','#aaa59a'],['Perla','#d0ccc3'],['Taupe','#8b7e70'],['Ocre suave','#a58d5a'],['Mostaza apagada','#807448']
+ ['Carbón','#292b2e'],['Grafito','#444647'],['Gris cálido','#797770'],['Piedra','#aaa59a'],['Perla','#d0ccc3'],['Taupe','#8b7e70'],['Ocre suave','#a58d5a'],['Mostaza apagada','#807448'],
+ ['Azul medianoche','#182d3e'],['Azul acero','#506778'],['Denim suave','#6b8295'],['Azul porcelana','#bdcbd3'],['Verde océano','#406b70'],['Turquesa humo','#6b9594'],['Celadón','#b2c9bd'],['Menta ceniza','#d4ded2'],
+ ['Verde ciprés','#384d43'],['Helecho','#697d61'],['Laurel','#849471'],['Pistacho suave','#b1b995'],['Oliva dorado','#8e895f'],['Trigo','#c9bb87'],['Vainilla','#e9dfbb'],['Crema','#f4eedc'],
+ ['Borgoña','#57333b'],['Granate humo','#79535b'],['Frambuesa gris','#956c7d'],['Rosa té','#c19a9d'],['Lila humo','#91829c'],['Brezo','#6f5874'],['Mora','#49354f'],['Lavanda pálida','#d2c8dc'],
+ ['Teja','#865b4f'],['Canela','#a17b61'],['Cobre mate','#b78d70'],['Durazno polvo','#d1af98'],['Salmón suave','#c89587'],['Coral ceniza','#aa7974'],['Chocolate','#513f36'],['Moka','#806757'],
+ ['Topo oscuro','#645c56'],['Greige','#b0a799'],['Gris azulado','#7c8992'],['Gris nube','#dce0df'],['Blanco hueso','#efe9df'],['Champaña','#ded0b5'],['Bronce apagado','#8d7952'],['Ámbar humo','#b49b6d']
 ];
 function luminance(hex){
  const rgb=hex.match(/[a-f\d]{2}/gi).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);
@@ -1480,8 +1485,8 @@ function paintBackground(ctx,s){
  ctx.fillStyle=s.bg;ctx.fillRect(0,0,W,W);if(!s.pattern)return;
  ctx.save();ctx.globalAlpha=.085;ctx.strokeStyle=resolvedTextColor({...s,topAutoColor:true},'top');ctx.fillStyle=ctx.strokeStyle;
  ctx.lineWidth=1.8;ctx.lineCap='round';ctx.lineJoin='round';
- for(let row=0;row<10;row++)for(let col=0;col<10;col++){
-  ctx.save();ctx.translate(col*112+(row%2?56:0)+24,row*112+25);ctx.rotate(((row+col)%3-1)*.14);
+ for(let row=0;row<17;row++)for(let col=0;col<17;col++){
+  ctx.save();ctx.translate(col*64+(row%2?32:0)+16,row*64+16);ctx.scale(.72,.72);ctx.rotate(((row+col)%3-1)*.14);
   const type=(row*3+col)%4;
   ctx.beginPath();
   if(type===0){
