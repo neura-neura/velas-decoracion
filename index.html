@@ -421,6 +421,7 @@ button,
 
 canvas{background:repeating-conic-gradient(#343747 0% 25%,#292c3a 0% 50%) 0/20px 20px}
 fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:10px;display:flex;flex-wrap:wrap;gap:12px}fieldset label{font-size:13px}input[type=checkbox]{accent-color:var(--accent)}select{max-width:100%}
+.palette{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-top:12px}.swatch{aspect-ratio:1;border:2px solid #ffffff35;border-radius:8px;cursor:pointer;min-height:28px}.swatch[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}.auto-label{margin-top:8px;letter-spacing:0!important;text-transform:none!important;font-weight:400!important}input[type=color]{cursor:pointer}
 </style>
 </head>
 <body>
@@ -445,6 +446,11 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
       <div class="field">
         <label for="bg">Color del fondo</label>
         <input id="bg" type="color">
+        <div id="palette" class="palette" role="group" aria-label="Colores discretos de fondo"></div>
+        <div class="hint">Elige un tono de la paleta o un color personalizado.</div>
+      </div><div class="field">
+        <label for="pattern"><input type="checkbox" id="pattern"> Patrón tenue de Día de Muertos</label>
+        <div class="hint">Calaveras, velas, pan de muerto y papel picado sobre el fondo.</div>
       </div>
 
       <div class="field">
@@ -508,7 +514,7 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
           </div>
           <div class="field">
             <label for="nameColor">Color</label>
-            <input id="nameColor" type="color">
+            <input id="nameColor" type="color"><label class="auto-label" for="nameAutoColor"><input id="nameAutoColor" type="checkbox"> Contraste automático</label>
           </div>
         </div>
         <div class="row">
@@ -533,7 +539,7 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
           </div>
           <div class="field">
             <label for="topColor">Color</label>
-            <input id="topColor" type="color">
+            <input id="topColor" type="color"><label class="auto-label" for="topAutoColor"><input id="topAutoColor" type="checkbox"> Contraste automático</label>
           </div>
         </div>
         <div class="row">
@@ -558,7 +564,7 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
           </div>
           <div class="field">
             <label for="bottomColor">Color</label>
-            <input id="bottomColor" type="color">
+            <input id="bottomColor" type="color"><label class="auto-label" for="bottomAutoColor"><input id="bottomAutoColor" type="checkbox"> Contraste automático</label>
           </div>
         </div>
         <div class="row">
@@ -649,6 +655,10 @@ const personDefaults={
   shape:'measured',
   taper:75,
   stretchPhoto:true,
+  pattern:false,
+  topAutoColor:true,
+  bottomAutoColor:true,
+  nameAutoColor:true,
   bg:'#202744',
   name:'Nombre de la persona',
   top:'En memoria de',
@@ -672,13 +682,14 @@ const personDefaults={
 };
 
 const controlIds=[
-  'shape','stretchPhoto','taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
+  'pattern','topAutoColor','bottomAutoColor','nameAutoColor','shape','stretchPhoto','taper','bg','name','top','bottom','zoom','photoSize','photoX','photoY',
   'nameSize','nameColor','nameX','nameY',
   'topSize','topColor','topX','topY',
   'bottomSize','bottomColor','bottomX','bottomY'
 ];
 
 let activePerson=0;
+let editorReady=false;
 
 function clone(obj){
   return JSON.parse(JSON.stringify(obj));
@@ -748,7 +759,7 @@ function persistPhoto(index,src){
 }
 async function initializeEditor(){
   try{photoDB=await openPhotoDB();}catch(e){storageMessage('No se pueden guardar fotos en este navegador. Los ajustes se guardan por separado.');}
-  migrateOrLoad();applyControls();updatePdfModeUI();draw();
+  migrateOrLoad();applyControls();editorReady=true;updatePdfModeUI();draw();
   if(photoDB){
     try{
       const stored=await new Promise((resolve,reject)=>{
@@ -977,8 +988,7 @@ function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
 
   targetCtx.setTransform(1,0,0,1,0,0);
   targetCtx.clearRect(0,0,W,W);
-  targetCtx.fillStyle=s.bg;
-  targetCtx.fillRect(0,0,W,W);
+  paintBackground(targetCtx,s);
 
   const frameScale=+s.photoSize/100;
   const photoZoom=+s.zoom;
@@ -1045,12 +1055,12 @@ function renderFlatPerson(index,targetCanvas,forcePlainPhoto=false){
     targetCtx.drawImage(p.frameImg,fx,fy,fw,fh);
   }
 
-  drawText(targetCtx,(s.top||'').trim(),+s.topX,+s.topY,+s.topSize,s.topColor);
-  drawText(targetCtx,(s.bottom||'').trim(),+s.bottomX,+s.bottomY,+s.bottomSize,s.bottomColor);
+  drawText(targetCtx,(s.top||'').trim(),+s.topX,+s.topY,+s.topSize,resolvedTextColor(s,'top'));
+  drawText(targetCtx,(s.bottom||'').trim(),+s.bottomX,+s.bottomY,+s.bottomSize,resolvedTextColor(s,'bottom'));
 
   const n=(s.name||'').trim();
   if(n){
-    drawText(targetCtx,n,+s.nameX,+s.nameY,+s.nameSize,s.nameColor);
+    drawText(targetCtx,n,+s.nameX,+s.nameY,+s.nameSize,resolvedTextColor(s,'name'));
   }
 }
 
@@ -1099,9 +1109,11 @@ function renderConePerson(index,targetCanvas){
 }
 
 function draw(){
+  if(!editorReady)return;
   captureControls();
   $('taperValue').textContent=people[activePerson].state.taper;
   updateShapeUI();
+  updateColorUI();
   renderPerson(activePerson,c);
 }
 
@@ -1117,9 +1129,8 @@ function personDataUrl(index){return exportPersonCanvas(index).toDataURL('image/
 
 controlIds.filter(id=>id!=='shape').forEach(id=>{
   $(id).addEventListener('input',()=>{
-    captureControls();
-    saveAll();
-    draw();
+    if(['topColor','bottomColor','nameColor'].includes(id))$(id.replace('Color','AutoColor')).checked=false;
+    captureControls();saveAll();draw();
   });
 });
 
@@ -1358,7 +1369,7 @@ function drawOvalCaption(ctx,s,key){
   const width=ctx.measureText(text).width;
   const offset=Math.max(-(length-width)/2,Math.min((length-width)/2,+s[key+'X']-512));
   let prefix='',cursor=0;
-  ctx.fillStyle=s[key+'Color'];ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle=resolvedTextColor(s,key);ctx.textAlign='center';ctx.textBaseline='middle';
   for(const char of Array.from(text)){
     const before=ctx.measureText(prefix).width;prefix+=char;
     const after=ctx.measureText(prefix).width;
@@ -1376,7 +1387,7 @@ function drawOvalCaption(ctx,s,key){
 function renderDecorative(index,canvas){
   const p=people[index],s=p.state,shape=s.shape,ctx=canvas.getContext('2d');
   const asset=shapeAssets[shape],horizontal=shape==='ovalH',diamond=shape==='diamond';
-  ctx.clearRect(0,0,W,W);ctx.save();outerShape(ctx,shape);ctx.clip();ctx.fillStyle=s.bg;ctx.fillRect(0,0,W,W);
+  ctx.clearRect(0,0,W,W);ctx.save();outerShape(ctx,shape);ctx.clip();paintBackground(ctx,s);
   // Leave room above and below the illustration for editable captions.
   const fs=Math.max(.3,+s.photoSize/100)*.82;
   ctx.save();ctx.translate(512,512);ctx.scale(fs,fs);ctx.translate(-512,-512);
@@ -1402,7 +1413,7 @@ function renderDecorative(index,canvas){
     const maxWidth=key==='name'?Math.min(availableWidth,fs*(diamond?285*800/1024:horizontal?375:340)):availableWidth;
     ctx.save();ctx.font='700 '+size+'px Georgia';const text=String(s[key]||'');
     const fitted=Math.min(size,size*maxWidth/Math.max(1,ctx.measureText(text).width));
-    ctx.font='700 '+fitted+'px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=s[key+'Color'];ctx.fillText(text,x,y);ctx.restore();
+    ctx.font='700 '+fitted+'px Georgia';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=resolvedTextColor(s,key);ctx.fillText(text,x,y);ctx.restore();
   }
   ctx.restore();
 }
@@ -1432,6 +1443,69 @@ $('shape').addEventListener('change',()=>{
   Object.assign(s,s.shapeLayouts[next]||layouts[next]||Object.fromEntries(layoutFields.map(k=>[k,personDefaults[k]])));
   s.shape=next;applyControls();saveAll();draw();
 });
+
+const mutedPalette=[
+ ['Azul noche','#202744'],['Índigo','#30354d'],['Pizarra','#414b59'],['Azul humo','#627586'],['Azul niebla','#98a6af'],['Azul tinta','#243d49'],['Petróleo','#36585c'],['Agua gris','#78908e'],
+ ['Pino','#2f453d'],['Bosque','#435847'],['Oliva','#60654b'],['Salvia','#8b9780'],['Eucalipto','#a7b19b'],['Musgo','#74785a'],['Verde humo','#596b63'],['Verde niebla','#c4cec0'],
+ ['Vino','#50363f'],['Ciruela','#554457'],['Malva','#817080'],['Lavanda gris','#a59aa9'],['Rosa viejo','#a78283'],['Rosa polvo','#c4aaa6'],['Berenjena','#3e3447'],['Gris violeta','#6a6477'],
+ ['Café','#473b35'],['Cacao','#665148'],['Terracota','#946e5c'],['Arcilla','#b28e79'],['Arena','#c9b69b'],['Lino','#e4d9c7'],['Marfil','#f2ebdb'],['Pergamino','#d7c7a8'],
+ ['Carbón','#292b2e'],['Grafito','#444647'],['Gris cálido','#797770'],['Piedra','#aaa59a'],['Perla','#d0ccc3'],['Taupe','#8b7e70'],['Ocre suave','#a58d5a'],['Mostaza apagada','#807448']
+];
+function luminance(hex){
+ const rgb=hex.match(/[a-f\d]{2}/gi).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);
+ return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;
+}
+function resolvedTextColor(s,key){
+ if(!s[key+'AutoColor'])return s[key+'Color'];
+ // The name sits on the cream ribbon, so its contrast is calculated there.
+ const bg=key==='name'?'#f2e5c5':s.bg,L=luminance(bg);
+ const choices=key==='name'?['#493329','#302d29']:['#f7efdf','#302d29'];
+ return choices.reduce((best,color)=>{
+  const contrast=c=>{const l=luminance(c);return (Math.max(L,l)+.05)/(Math.min(L,l)+.05);};
+  return contrast(color)>contrast(best)?color:best;
+ });
+}
+function updateColorUI(){
+ document.querySelectorAll('.swatch').forEach(btn=>btn.setAttribute('aria-pressed',String(btn.dataset.color===$('bg').value)));
+ for(const key of ['top','bottom','name']){
+  if(people[activePerson].state[key+'AutoColor'])$(key+'Color').value=resolvedTextColor(people[activePerson].state,key);
+ }
+}
+for(const [label,color] of mutedPalette){
+ const btn=document.createElement('button');btn.type='button';btn.className='swatch';btn.style.background=color;btn.dataset.color=color;
+ btn.title=label;btn.setAttribute('aria-label',label);btn.setAttribute('aria-pressed','false');
+ btn.addEventListener('click',()=>{$('bg').value=color;$('bg').dispatchEvent(new Event('input'));});$('palette').appendChild(btn);
+}
+function paintBackground(ctx,s){
+ ctx.fillStyle=s.bg;ctx.fillRect(0,0,W,W);if(!s.pattern)return;
+ ctx.save();ctx.globalAlpha=.085;ctx.strokeStyle=resolvedTextColor({...s,topAutoColor:true},'top');ctx.fillStyle=ctx.strokeStyle;
+ ctx.lineWidth=1.8;ctx.lineCap='round';ctx.lineJoin='round';
+ for(let row=0;row<10;row++)for(let col=0;col<10;col++){
+  ctx.save();ctx.translate(col*112+(row%2?56:0)+24,row*112+25);ctx.rotate(((row+col)%3-1)*.14);
+  const type=(row*3+col)%4;
+  ctx.beginPath();
+  if(type===0){
+   ctx.moveTo(-12,5);ctx.bezierCurveTo(-25,-22,25,-22,12,5);ctx.lineTo(9,15);ctx.lineTo(-9,15);ctx.closePath();ctx.stroke();
+   for(const x of [-7,7]){ctx.beginPath();ctx.ellipse(x,-2,3,4,0,0,Math.PI*2);ctx.fill();}
+   ctx.beginPath();ctx.moveTo(-2,5);ctx.lineTo(0,2);ctx.lineTo(2,5);ctx.stroke();
+   for(const x of [-5,0,5]){ctx.beginPath();ctx.moveTo(x,11);ctx.lineTo(x,15);ctx.stroke();}
+  }else if(type===1){
+   ctx.rect(-7,-4,14,24);ctx.stroke();ctx.beginPath();ctx.ellipse(0,-4,7,2,0,0,Math.PI*2);ctx.stroke();
+   ctx.beginPath();ctx.moveTo(0,-7);ctx.bezierCurveTo(-9,-15,1,-19,0,-25);ctx.bezierCurveTo(12,-14,6,-10,0,-7);ctx.stroke();
+  }else if(type===2){
+   ctx.ellipse(0,5,21,12,0,0,Math.PI*2);ctx.stroke();
+   for(const angle of [-.65,.65]){ctx.save();ctx.rotate(angle);ctx.beginPath();ctx.moveTo(-15,0);ctx.quadraticCurveTo(0,-5,15,0);ctx.stroke();ctx.restore();}
+   ctx.beginPath();ctx.arc(0,-1,4,0,Math.PI*2);ctx.stroke();
+  }else{
+   ctx.moveTo(-24,-17);ctx.lineTo(24,-17);ctx.stroke();ctx.beginPath();ctx.moveTo(-19,-15);ctx.lineTo(19,-15);ctx.lineTo(19,12);
+   ctx.quadraticCurveTo(14,23,9,12);ctx.quadraticCurveTo(0,23,-9,12);ctx.quadraticCurveTo(-14,23,-19,12);ctx.closePath();ctx.stroke();
+   for(const x of [-10,0,10]){ctx.beginPath();ctx.moveTo(x,-9);ctx.lineTo(x+3,-4);ctx.lineTo(x,1);ctx.lineTo(x-3,-4);ctx.closePath();ctx.stroke();}
+   ctx.beginPath();ctx.moveTo(-9,7);ctx.lineTo(9,7);ctx.stroke();
+  }
+  ctx.restore();
+ }
+ ctx.restore();
+}
 
 initializeEditor();
 </script>
