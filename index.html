@@ -1483,8 +1483,8 @@ for(const [label,color] of mutedPalette){
 }
 function paintBackground(ctx,s){
  ctx.fillStyle=s.bg;ctx.fillRect(0,0,W,W);if(!s.pattern)return;
- ctx.save();ctx.globalAlpha=.085;ctx.strokeStyle=resolvedTextColor({...s,topAutoColor:true},'top');ctx.fillStyle=ctx.strokeStyle;
- ctx.lineWidth=1.8;ctx.lineCap='round';ctx.lineJoin='round';
+ ctx.save();ctx.globalAlpha=.20;ctx.strokeStyle=resolvedTextColor({...s,topAutoColor:true},'top');ctx.fillStyle=ctx.strokeStyle;
+ ctx.lineWidth=2.2;ctx.lineCap='round';ctx.lineJoin='round';
  for(let row=0;row<17;row++)for(let col=0;col<17;col++){
   ctx.save();ctx.translate(col*64+(row%2?32:0)+16,row*64+16);ctx.scale(.72,.72);ctx.rotate(((row+col)%3-1)*.14);
   const type=(row*3+col)%4;
