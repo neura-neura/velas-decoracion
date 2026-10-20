@@ -443,6 +443,17 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
 
       <div class="person-note" id="personNote">Editando Persona 1.</div>
 
+      <details class="section" open><summary>Gotero y colores recientes</summary>
+        <div class="field"><label for="colorTarget">Aplicar color a</label><select id="colorTarget"><option value="bg">Fondo</option><option value="topColor">Texto superior</option><option value="bottomColor">Texto inferior</option><option value="nameColor">Nombre</option></select></div>
+        <button type="button" class="btn secondary" id="screenDropper">Gotero de pantalla</button>
+        <div class="hint" id="dropperHint">Toma un color de cualquier punto visible. Esc cancela.</div>
+        <div class="field"><label for="sampleImage">Imagen de muestra (opcional)</label><input id="sampleImage" type="file" class="file" accept="image/*"></div>
+        <canvas id="sampleCanvas" hidden aria-label="Imagen de muestra: toca un punto para tomar su color" style="width:100%;height:auto;cursor:crosshair"></canvas>
+        <div class="hint">Toca la imagen de muestra para elegir un color. También puedes muestrear el diseño con el botón de abajo.</div>
+        <button type="button" class="btn secondary" id="canvasDropper">Tomar del diseño</button>
+        <p class="hint" id="colorToolStatus" role="status" aria-live="polite"></p>
+        <div class="hint">Historial de colores · toca para reutilizar</div><div id="colorHistory" class="palette"></div>
+      </details>
       <div class="field">
         <label for="bg">Color del fondo</label>
         <input id="bg" type="color">
@@ -582,7 +593,9 @@ fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:1
       <div class="section">
         <h3>Herramientas de personas</h3>
         <div class="actions">
-          <button type="button" class="btn secondary wide" id="copyDesign">Copiar diseño de Persona 1 a Personas 2–4</button>
+          <div class="wide"><label for="copySource">Copiar diseño de</label><select id="copySource"><option value="0">Persona 1</option><option value="1">Persona 2</option><option value="2">Persona 3</option><option value="3">Persona 4</option></select>
+          <fieldset><legend>Copiar a</legend><label><input type="checkbox" id="copyTo0"> Persona 1</label><label><input type="checkbox" id="copyTo1" checked> Persona 2</label><label><input type="checkbox" id="copyTo2" checked> Persona 3</label><label><input type="checkbox" id="copyTo3" checked> Persona 4</label></fieldset></div>
+          <button type="button" class="btn secondary wide" id="copyDesign">Copiar diseño a las personas marcadas</button><div class="hint wide" id="copyStatus" role="status">Cada destino conserva su fotografía y nombre.</div>
           <button type="button" class="btn secondary" id="resetPerson">Restablecer persona activa</button>
           <button type="button" class="btn primary" id="download">Descargar PNG activa</button>
         </div>
@@ -884,6 +897,7 @@ function captureControls(){
   controlIds.forEach(id=>{
     const el=$(id);
     if(!el)return;
+    if(el.type==='color'&&id!=='bg'&&$(id.replace('Color','AutoColor')).checked)return;
     s[id]=el.type==='checkbox'?el.checked:(el.type==='range'||el.type==='number')?+el.value:el.value;
   });
 }
@@ -1170,30 +1184,19 @@ $('clearPhotos').addEventListener('click',async()=>{
   catch(e){storageMessage('No se pudo guardar la eliminación de fotos. Reintenta antes de cerrar.');}
 });
 
+function updateCopyTargets(){
+ const from=+$('copySource').value;
+ for(let i=0;i<4;i++){const el=$('copyTo'+i);el.disabled=i===from;if(i===from)el.checked=false;}
+}
+$('copySource').addEventListener('change',updateCopyTargets);updateCopyTargets();
 $('copyDesign').addEventListener('click',()=>{
-  captureControls();
-
-  const source=people[0];
-
-  for(let index=1;index<4;index++){
-    const target=people[index];
-    const keepName=target.state.name;
-
-    target.state=clone(source.state);
-    target.state.name=keepName && keepName!=='Nombre de la persona'
-      ? keepName
-      : 'Nombre de la persona '+(index+1);
-
-    // Cada persona conserva su propia fotografía.
-    target.frameSrc=source.frameSrc;
-    target.frameImg=loadImage(target.frameSrc,()=>draw());
-  }
-
-  applyControls();
-  saveAll();
-  draw();
-
-  alert('Diseño de Persona 1 copiado a Personas 2, 3 y 4. Sus fotografías y nombres se conservaron.');
+ captureControls();const from=+$('copySource').value;
+ const targets=[0,1,2,3].filter(i=>i!==from&&$('copyTo'+i).checked);
+ if(!targets.length){$('copyStatus').textContent='Marca al menos una persona de destino.';return;}
+ const design=clone(people[from].state);
+ for(const i of targets){const name=people[i].state.name;people[i].state=clone(design);people[i].state.name=name;}
+ applyControls();saveAll();draw();
+ $('copyStatus').textContent='Diseño de Persona '+(from+1)+' copiado a '+targets.map(i=>'Persona '+(i+1)).join(', ')+'.';
 });
 $('resetPerson').addEventListener('click',()=>{
   const index=activePerson;
@@ -1511,6 +1514,65 @@ function paintBackground(ctx,s){
  }
  ctx.restore();
 }
+
+const COLOR_TOOLS_KEY='memorialColorToolsV1';
+let colorTools={history:[],last:{},target:'bg'};
+try{const data=JSON.parse(localStorage.getItem(COLOR_TOOLS_KEY)||'null');if(data){colorTools.history=Array.isArray(data.history)?data.history.filter(c=>/^#[0-9a-f]{6}$/i.test(c)).slice(0,32):[];colorTools.last=data.last||{};if(['bg','topColor','bottomColor','nameColor'].includes(data.target))colorTools.target=data.target;}}catch(e){}
+$('colorTarget').value=colorTools.target;
+function saveColorTools(){try{localStorage.setItem(COLOR_TOOLS_KEY,JSON.stringify(colorTools));}catch(e){storageMessage('No se pudo guardar el historial de colores.');}}
+function rememberColor(target,color){
+ if(!/^#[0-9a-f]{6}$/i.test(color))return;
+ color=color.toLowerCase();colorTools.last[target]=color;
+ colorTools.history=[color,...colorTools.history.filter(c=>c!==color)].slice(0,32);saveColorTools();renderColorHistory();
+}
+function renderColorHistory(){
+ const box=$('colorHistory');box.replaceChildren();
+ for(const color of colorTools.history){const b=document.createElement('button');b.type='button';b.className='swatch';b.style.background=color;b.title=color;b.setAttribute('aria-label','Usar '+color);b.onclick=()=>applyPickedColor(color);box.appendChild(b);}
+}
+function applyPickedColor(color,target=$('colorTarget').value,person=activePerson){
+ if(!/^#[0-9a-f]{6}$/i.test(color))return;
+ if(person===activePerson){$(target).value=color;$(target).dispatchEvent(new Event('input'));}
+ else{people[person].state[target]=color;if(target!=='bg')people[person].state[target.replace('Color','AutoColor')]=false;saveAll();draw();}
+ rememberColor(target,color);$('colorToolStatus').textContent='Color '+color+' aplicado a Persona '+(person+1)+'.';
+}
+$('colorTarget').addEventListener('change',()=>{colorTools.target=$('colorTarget').value;saveColorTools();renderLastColor();});
+function renderLastColor(){
+ let button=$('reuseLastColor');
+ if(!button){button=document.createElement('button');button.id='reuseLastColor';button.type='button';button.className='btn secondary';$('colorHistory').before(button);button.onclick=()=>applyPickedColor(colorTools.last[$('colorTarget').value]);}
+ const color=colorTools.last[$('colorTarget').value];button.hidden=!/^#[0-9a-f]{6}$/i.test(color||'');button.textContent='Usar último color'+(color?' · '+color:'');
+}
+for(const id of ['bg','topColor','bottomColor','nameColor']){
+ $(id).addEventListener('change',()=>{rememberColor(id,$(id).value);renderLastColor();});
+ $(id).addEventListener('click',()=>{
+  $('colorTarget').value=id;colorTools.target=id;saveColorTools();renderLastColor();
+  if(id!=='bg')$(id).value=people[activePerson].state[id];
+ });
+}
+// Palette choices also enter the persistent history.
+$('bg').addEventListener('input',()=>{rememberColor('bg',$('bg').value);renderLastColor();});
+$('screenDropper').disabled=!('EyeDropper' in window);
+if(!('EyeDropper' in window))$('dropperHint').textContent='Este navegador no ofrece gotero de pantalla. Puedes tomar colores de la imagen de muestra o del diseño.';
+$('screenDropper').addEventListener('click',async()=>{
+ const target=$('colorTarget').value,person=activePerson;
+ try{const result=await new EyeDropper().open();applyPickedColor(result.sRGBHex,target,person);renderLastColor();}
+ catch(e){if(e.name!=='AbortError')$('colorToolStatus').textContent='No se pudo abrir el gotero. Usa la imagen de muestra o el diseño.';}
+});
+let sampleVersion=0;
+$('sampleImage').addEventListener('change',e=>{
+ const file=e.target.files[0];if(!file)return;const version=++sampleVersion,url=URL.createObjectURL(file),img=new Image();
+ img.onload=()=>{URL.revokeObjectURL(url);if(version!==sampleVersion)return;const canvas=$('sampleCanvas');const scale=Math.min(1,1600/Math.max(img.width,img.height));canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);canvas.hidden=false;};
+ img.onerror=()=>{URL.revokeObjectURL(url);$('colorToolStatus').textContent='No se pudo abrir la imagen de muestra.';};img.src=url;
+});
+function samplePixel(canvas,e){
+ const rect=canvas.getBoundingClientRect(),x=Math.max(0,Math.min(canvas.width-1,Math.floor((e.clientX-rect.left)*canvas.width/rect.width))),y=Math.max(0,Math.min(canvas.height-1,Math.floor((e.clientY-rect.top)*canvas.height/rect.height)));
+ try{const rgba=canvas.getContext('2d').getImageData(x,y,1,1).data;if(rgba[3]===0){$('colorToolStatus').textContent='Ese punto es transparente. Elige una zona con color.';return;}applyPickedColor('#'+Array.from(rgba.slice(0,3),v=>v.toString(16).padStart(2,'0')).join(''));renderLastColor();}
+ catch(e){$('colorToolStatus').textContent='No se pudo leer ese píxel. Prueba el gotero de pantalla.';}
+}
+$('sampleCanvas').addEventListener('click',e=>samplePixel($('sampleCanvas'),e));
+let samplingDesign=false;
+$('canvasDropper').onclick=()=>{samplingDesign=!samplingDesign;c.style.cursor=samplingDesign?'crosshair':'';$('canvasDropper').textContent=samplingDesign?'Cancelar gotero del diseño':'Tomar del diseño';$('colorToolStatus').textContent=samplingDesign?'Toca un punto del diseño para tomar su color.':'';};
+c.addEventListener('click',e=>{if(!samplingDesign)return;samplePixel(c,e);samplingDesign=false;c.style.cursor='';$('canvasDropper').textContent='Tomar del diseño';});
+renderColorHistory();renderLastColor();
 
 initializeEditor();
 </script>
